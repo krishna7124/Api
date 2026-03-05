@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: Attack Surface Intel (SecurityTrails)
+  version: 1.0.0
+  description: Minimal API for attack surface investigation using SecurityTrails.
+
+servers:
+  - url: https://api.securitytrails.com/v1  # per docs
+
+paths:
+  /domain/{domain}/subdomains:
+    get:
+      summary: List subdomains for a root domain
+      description: Returns known subdomains to help enumerate external attack surface.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string, example: example.com }
+        - name: children_only
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /domain/{domain}/dns:
+    get:
+      summary: DNS records (current and/or historical) for a domain
+      description: Fetch DNS records to see infrastructure and historical changes.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string, example: example.com }
+        - name: type
+          in: query
+          required: false
+          description: Optional record type (A, AAAA, MX, NS, TXT, etc.)
+          schema: { type: string }
+        - name: history
+          in: query
+          required: false
+          description: If set, returns historical records when supported.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /domain/{domain}/ip-history:
+    get:
+      summary: Historical IPs that a domain resolved to
+      description: Useful to track hosting changes and pivot to related assets.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string, example: example.com }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /ips/{ip}/associated:
+    get:
+      summary: Reverse IP - domains hosted on an IP
+      description: Discover co-hosted domains on a given IP (pivot for attack surface).
+      parameters:
+        - name: ip
+          in: path
+          required: true
+          schema: { type: string, example: 8.8.8.8 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+components:
+  securitySchemes:
+    st_api_key:
+      type: apiKey
+      in: header
+      name: APIKEY   # per SecurityTrails docs
+
+security:
+  - st_api_key: []

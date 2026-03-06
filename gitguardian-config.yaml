@@ -1,0 +1,258 @@
+openapi: 3.0.3
+info:
+  title: GitGuardian API (ServiceHTTP / PAT)
+  version: 1.2.0
+  description: |
+    Read-only GitGuardian API with optional scan support, authenticated via Personal Access Token:
+      Authorization: Token <PAT>
+    This spec exposes health, incidents, members, sources, honeytokens, and (optionally) scan.
+
+    References:
+      - Authentication (Authorization: Token <PAT>): https://docs.gitguardian.com/api-docs/authentication
+      - API Reference (endpoints overview): https://api.gitguardian.com/docs
+      - Pagination (cursor via `Link: ... rel="next"`): https://docs.gitguardian.com/api-docs/pagination
+      - SaaS vs self-hosted base URL: https://docs.gitguardian.com/platform/gitguardian-suite/api
+
+servers:
+  - url: https://api.gitguardian.com
+
+components:
+  securitySchemes:
+    gg_pat_token:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Use "Token <YOUR_PAT>" as the header value.
+  parameters:
+    per_page:
+      name: per_page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Items per page (use cursor pagination via Link header for next pages).
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Cursor for fetching the next page (normally obtained from Link header of prior response).
+  responses:
+    Unauthorized:
+      description: Authentication failed (check PAT and scopes).
+    NotFound:
+      description: Resource not found.
+
+security:
+  - gg_pat_token: []
+
+paths:
+
+  #########################
+  # Health
+  #########################
+  /v1/health:
+    get:
+      summary: Health check (validates token & API availability)
+      description: Returns OK if API is reachable and your PAT is valid.
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Incidents (Internal Secret Incidents)
+  #########################
+  /v1/incidents/secrets:
+    get:
+      summary: List internal secret incidents (cursor-based pagination)
+      description: |
+        Returns a page of internal secret incidents. Use the HTTP `Link` header (rel="next") to iterate.
+        Start with per_page; subsequent calls should follow the Link-provided URL.
+      parameters:
+        - $ref: '#/components/parameters/per_page'
+        # Optional: some deployments accept an explicit cursor parameter in query,
+        # but the recommended approach is to follow the response's Link header.
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: OK (array of incidents)
+          headers:
+            Link:
+              description: Cursor pagination link header; follow rel="next" to continue.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/incidents/secrets/{incident_id}:
+    get:
+      summary: Get a secret incident by id
+      parameters:
+        - name: incident_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Secrets (read details tied to incidents, if exposed)
+  #########################
+  /v1/incidents/secrets/{incident_id}/secret:
+    get:
+      summary: Retrieve secret details for an incident (if available)
+      description: Returns secret-related info for the given incident (availability may vary).
+      parameters:
+        - name: incident_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Members (read)
+  #########################
+  /v1/members:
+    get:
+      summary: List workspace members (cursor-based pagination)
+      parameters:
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: OK (array of members)
+          headers:
+            Link:
+              description: Cursor pagination link header; follow rel="next".
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Sources (repositories / monitored sources)
+  #########################
+  /v1/sources:
+    get:
+      summary: List monitored sources (cursor-based pagination)
+      parameters:
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: OK (array of sources)
+          headers:
+            Link:
+              description: Cursor pagination link header; follow rel="next".
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Honeytokens (read)
+  #########################
+  /v1/honeytokens:
+    get:
+      summary: List honeytokens (cursor-based pagination; product must be enabled)
+      parameters:
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: OK (array of honeytokens)
+          headers:
+            Link:
+              description: Cursor pagination link header; follow rel="next".
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/honeytokens/events:
+    get:
+      summary: List honeytoken events (cursor-based pagination; product must be enabled)
+      parameters:
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: OK (array of events)
+          headers:
+            Link:
+              description: Cursor pagination link header; follow rel="next".
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  #########################
+  # Scan (optional; plan-dependent)
+  #########################
+  /v1/scans:
+    post:
+      summary: Scan raw content for hardcoded secrets (requires `scan` scope; plan-dependent)
+      description: |
+        Submit raw text content to GitG

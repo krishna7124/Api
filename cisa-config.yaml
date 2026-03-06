@@ -1,0 +1,240 @@
+openapi: 3.0.3
+info:
+  title: CISA KEV Feed (No Auth)
+  version: 1.2.0
+  description: |
+    Public Known Exploited Vulnerabilities (KEV) catalog published by CISA (no authentication).
+    The canonical feed is a single JSON document; additional virtual paths below represent common filtered
+    views to guide calling tools. All filtered paths ultimately retrieve the same upstream JSON and apply
+    client-side filtering in the client/tooling layer.
+
+    Sources:
+    - CISA KEV catalog & JSON feed (public, no auth)
+    - Official JSON schema reference (updated 2024-06-25)
+    - cisagov GitHub mirror for resilience
+
+servers:
+  - url: https://www.cisa.gov
+    description: Canonical CISA site hosting the KEV JSON feed.
+  
+  - url: https://raw.githubusercontent.com/cisagov/kev-data/develop
+    description: cisagov mirror of KEV JSON (fallback)
+
+tags:
+  - name: kev
+    description: Known Exploited Vulnerabilities (CISA)
+
+paths:
+  /sites/default/files/feeds/known_exploited_vulnerabilities.json:
+    get:
+      tags: [kev]
+      summary: Raw KEV feed (full JSON)
+      description: >
+        Returns the full Known Exploited Vulnerabilities catalog as a JSON object with a "vulnerabilities" array.
+        Canonical public endpoint hosted by CISA (no auth).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KEVFeed'
+
+  /kev:
+    get:
+      tags: [kev]
+      summary: KEV feed (alias to raw)
+      description: >
+        Convenience alias that fetches the canonical KEV JSON and returns it as-is.
+        Clients should request the canonical feed path internally.
+      parameters:
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/latest:
+    get:
+      tags: [kev]
+      summary: Latest N entries by dateAdded (client-side filtered)
+      description: >
+        Returns the most recent N KEV entries by dateAdded. Implemented by fetching the KEV feed and sorting client-side.
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/by-cve:
+    get:
+      tags: [kev]
+      summary: Filter by CVE ID (client-side filtered)
+      parameters:
+        - name: cve
+          in: query
+          required: true
+          description: CVE identifier (e.g., CVE-2024-12345)
+          schema: { type: string, pattern: '^CVE-\\d{4}-\\d{4,}$' }
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Matched entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/by-vendor:
+    get:
+      tags: [kev]
+      summary: Filter by vendor and/or product (client-side filtered)
+      parameters:
+        - name: vendor
+          in: query
+          required: false
+          description: Case-insensitive substring to match vendorProject.
+          schema: { type: string, minLength: 1 }
+        - name: product
+          in: query
+          required: false
+          description: Case-insensitive substring to match product.
+          schema: { type: string, minLength: 1 }
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Matched entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/overdue:
+    get:
+      tags: [kev]
+      summary: Entries past dueDate (client-side filtered)
+      description: >
+        Returns KEV entries whose dueDate is earlier than "today" (UTC) and therefore overdue for remediation.
+      parameters:
+        - name: today
+          in: query
+          required: false
+          description: Override "today" in ISO-8601 (YYYY-MM-DD) for deterministic testing.
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Overdue entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/since:
+    get:
+      tags: [kev]
+      summary: Entries added since a date (client-side filtered)
+      parameters:
+        - name: since
+          in: query
+          required: true
+          description: Only include entries with dateAdded >= this ISO-8601 date (YYYY-MM-DD).
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Newer entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/search:
+    get:
+      tags: [kev]
+      summary: Free-text contains search (client-side filtered)
+      description: >
+        Case-insensitive substring search across vendorProject, product, vulnerabilityName, and description fields.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2 }
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Matched entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KEVFeed' }
+
+  /kev/stats/vendors:
+    get:
+      tags: [kev]
+      summary: Simple vendor frequency stats (client-side computed)
+      description: >
+        Returns a summary object mapping vendorProject -> count of entries.
+      parameters:
+        - $ref: '#/components/parameters/source'
+      responses:
+        '200':
+          description: Vendor counts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                  minimum: 0
+
+components:
+  parameters:
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Number of most recent entries to return (default 20, max 200).
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+    source:
+      name: source
+      in: query
+      required: false
+      description: |
+        Optional source selection:
+        - "cisa" -> canonical CISA feed
+        - "mirror" -> cisagov GitHub mirror
+        If omitted, clients should try CISA first and fall back to the mirror on failure.
+      schema:
+        type: string
+        enum: [cisa, mirror]
+
+  schemas:
+    KEVFeed:
+      type: object
+      properties:
+        vulnerabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/KEVEntry'
+      required: [vulnerabilities]
+
+    KEVEntry:
+      type: object
+      description: >
+        A single KEV catalog entry (fields per CISA KEV JSON). Some fields may be absent depending on the record.
+      properties:
+        cveID:            { type: string, example: "CVE-2024-12345" }
+        vendorProject:    { type: string, example: "Microsoft" }
+        product:          { type: string, example: "Exchange Server" }
+        vulnerabilityName:{ type: string, example: "Arbitrary Code Execution" }
+        dateAdded:        { type: string, format: date, example: "2026-03-05" }
+        shortDescription: { type: string }
+        description:      { type: string }
+        requiredAction:   { type: string, example: "Apply updates per vendor instructions." }
+        dueDate:          { type: string, format: date, example: "2026-03-26" }
+        knownRansomwareCampaignUse: { type: string, example: "Known" }
+        notes:            { type: string }
+       
+      additionalProperties: true

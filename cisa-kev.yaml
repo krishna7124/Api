@@ -1,0 +1,49 @@
+openapi: 3.0.3
+info:
+  title: CISA KEV Catalog (Official JSON)
+  version: "1.0.0"
+  description: >
+    Read-only access to CISA's Known Exploited Vulnerabilities (KEV) catalog via the official JSON feed.
+    The caller (Copilot) should filter client-side by CVE ID, vendor, product, date range, and ransomware use.
+
+servers:
+  # Official CISA KEV JSON feed (authoritative)
+  - url: https://www.cisa.gov/sites/default/files/feeds
+
+paths:
+  /known_exploited_vulnerabilities.json:
+    get:
+      operationId: getKevCatalog
+      summary: Get the full KEV catalog (JSON)
+      description: >
+        Returns the KEV catalog. Fields include cveID, vendorProject, product, vulnerabilityName, dateAdded,
+        shortDescription, requiredAction, dueDate, knownRansomwareCampaignUse, notes, cwes.
+      responses:
+        "200":
+          description: KEV catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  catalogVersion: { type: string }
+                  dateReleased: { type: string, format: date-time }
+                  count: { type: integer }
+                  vulnerabilities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cveID: { type: string }
+                        vendorProject: { type: string }
+                        product: { type: string }
+                        vulnerabilityName: { type: string }
+                        dateAdded: { type: string, format: date }
+                        shortDescription: { type: string }
+                        requiredAction: { type: string }
+                        dueDate: { type: string, format: date }
+                        knownRansomwareCampaignUse: { type: string }
+                        notes: { type: string }
+                        cwes:
+                          type: array
+                          items: { type: string }

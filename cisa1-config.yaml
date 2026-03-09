@@ -1,0 +1,59 @@
+openapi: 3.0.3
+info:
+  title: CISA KEV Catalog
+  version: "1.0.0"
+  description: >
+    Read-only access to CISA's Known Exploited Vulnerabilities (KEV) catalog (JSON feed).
+    The model should client-side filter by CVE ID, vendor, product, date range, ransomware use, etc.
+servers:
+  # Option A: Official CISA feed
+  - url: https://www.cisa.gov/sites/default/files/feeds
+  # Option B (fallback): CISA GitHub mirror
+  # - url: https://raw.githubusercontent.com/cisagov/kev-data/develop
+paths:
+  /known_exploited_vulnerabilities.json:
+    get:
+      operationId: getKevCatalog
+      summary: Get the full KEV catalog (JSON)
+      description: >
+        Returns the KEV catalog. Fields include cveID, vendorProject, product,
+        vulnerabilityName, dateAdded, shortDescription, requiredAction, dueDate,
+        knownRansomwareCampaignUse, notes, cwes. The caller (Copilot) should filter client-side.
+      parameters:
+        - in: query
+          name: hint_cve
+          schema: { type: string }
+          description: Optional hint (e.g., "CVE-2023-23397") for model-side filtering.
+        - in: query
+          name: hint_text
+          schema: { type: string }
+          description: Optional keyword hint (vendor/product/name) for model-side filtering.
+      responses:
+        "200":
+          description: KEV catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  catalogVersion: { type: string }
+                  dateReleased: { type: string, format: date-time }
+                  count: { type: integer }
+                  vulnerabilities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cveID: { type: string }
+                        vendorProject: { type: string }
+                        product: { type: string }
+                        vulnerabilityName: { type: string }
+                        dateAdded: { type: string, format: date }
+                        shortDescription: { type: string }
+                        requiredAction: { type: string }
+                        dueDate: { type: string, format: date }
+                        knownRansomwareCampaignUse: { type: string }
+                        notes: { type: string }
+                        cwes:
+                          type: array
+                          items: { type: string }
